@@ -4,10 +4,9 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
 import type { Quiz } from "@shared/schema";
+import { Check } from "lucide-react";
 
 export default function Quiz({ params }: { params: { id: string } }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
@@ -16,7 +15,7 @@ export default function Quiz({ params }: { params: { id: string } }) {
     isCorrect: boolean;
   }[]>([]);
   const [showExplanation, setShowExplanation] = useState(false);
-  const [currentSelection, setCurrentSelection] = useState<string | undefined>();
+  const [currentSelection, setCurrentSelection] = useState<number | undefined>();
   const [, navigate] = useLocation();
 
   const { data: quiz, isLoading } = useQuery<Quiz>({
@@ -34,9 +33,10 @@ export default function Quiz({ params }: { params: { id: string } }) {
   const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
   const currentQ = quiz.questions[currentQuestion];
 
-  const handleAnswer = async (selectedOption: string) => {
-    setCurrentSelection(selectedOption);
-    const selected = parseInt(selectedOption);
+  const handleAnswer = (selected: number) => {
+    if (showExplanation) return;
+
+    setCurrentSelection(selected);
     const isCorrect = selected === currentQ.correctAnswer;
 
     setSelectedAnswers([...selectedAnswers, { answer: selected, isCorrect }]);
@@ -87,34 +87,41 @@ export default function Quiz({ params }: { params: { id: string } }) {
             </div>
           </CardHeader>
           <CardContent className="pt-6 space-y-8">
-            <RadioGroup
-              value={currentSelection}
-              onValueChange={handleAnswer}
-              className="space-y-4"
-              disabled={showExplanation}
-            >
+            <div className="grid gap-4">
               {currentQ.options.map((option, index) => (
-                <div 
-                  key={index} 
-                  className={`relative flex items-start p-4 rounded-lg transition-colors
-                    ${currentSelection === index.toString() ? 'bg-primary/5 border border-primary/20' : 'hover:bg-gray-50 border border-transparent'}`}
+                <button
+                  key={index}
+                  onClick={() => handleAnswer(index)}
+                  disabled={showExplanation}
+                  className={`
+                    w-full p-4 text-left rounded-lg transition-all duration-200
+                    border-2 relative overflow-hidden group
+                    ${currentSelection === index 
+                      ? 'border-primary bg-primary/5 shadow-md' 
+                      : 'border-gray-200 hover:border-primary/50 hover:bg-gray-50'
+                    }
+                    ${showExplanation ? 'cursor-default' : 'cursor-pointer'}
+                    disabled:opacity-70
+                  `}
                 >
-                  <div className="flex items-center h-5">
-                    <RadioGroupItem 
-                      value={index.toString()} 
-                      id={`option-${index}`}
-                      className="w-4 h-4"
-                    />
+                  <div className="flex items-center gap-3">
+                    <div className={`
+                      flex items-center justify-center w-6 h-6 rounded-full shrink-0
+                      border-2 transition-colors
+                      ${currentSelection === index 
+                        ? 'border-primary bg-primary text-white' 
+                        : 'border-gray-300 group-hover:border-primary/50'
+                      }
+                    `}>
+                      {currentSelection === index && <Check className="w-4 h-4" />}
+                    </div>
+                    <span className="text-base font-medium">
+                      {option}
+                    </span>
                   </div>
-                  <Label 
-                    htmlFor={`option-${index}`}
-                    className="ml-3 text-base font-medium cursor-pointer"
-                  >
-                    {option}
-                  </Label>
-                </div>
+                </button>
               ))}
-            </RadioGroup>
+            </div>
 
             {showExplanation && (
               <div className="mt-8 rounded-lg bg-blue-50 border border-blue-100">
