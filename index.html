@@ -27,44 +27,25 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // React Components
-        function App() {
-            const [page, setPage] = React.useState('home');
-            const [quizData, setQuizData] = React.useState(null);
-            const [quizResult, setQuizResult] = React.useState(null);
+        // React Components and Application Logic
+        const { useState, useEffect } = React;
 
-            return (
-                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
-                    {page === 'home' && (
-                        <Home onQuizStart={(data) => {
-                            setQuizData(data);
-                            setPage('quiz');
-                        }} />
-                    )}
-                    {page === 'quiz' && quizData && (
-                        <Quiz 
-                            quiz={quizData} 
-                            onComplete={(result) => {
-                                setQuizResult(result);
-                                setPage('results');
-                            }}
-                        />
-                    )}
-                    {page === 'results' && quizResult && (
-                        <Results 
-                            result={quizResult} 
-                            quiz={quizData}
-                            onRetry={() => setPage('quiz')}
-                            onNewQuiz={() => setPage('home')}
-                        />
-                    )}
-                </div>
-            );
+        async function apiRequest(method, url, data) {
+            const res = await fetch(url, {
+                method,
+                headers: { "Content-Type": "application/json" },
+                body: data ? JSON.stringify(data) : undefined,
+            });
+            if (!res.ok) {
+                const text = await res.text();
+                throw new Error(text || res.statusText);
+            }
+            return res.json();
         }
 
-        function Home({ onQuizStart }) {
-            const [topic, setTopic] = React.useState('');
-            const [loading, setLoading] = React.useState(false);
+        function Home({ onStartQuiz }) {
+            const [topic, setTopic] = useState("");
+            const [loading, setLoading] = useState(false);
 
             const handleSubmit = async (e) => {
                 e.preventDefault();
@@ -72,15 +53,10 @@
 
                 setLoading(true);
                 try {
-                    const res = await fetch('/api/quizzes', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ topic })
-                    });
-                    const data = await res.json();
-                    onQuizStart(data);
+                    const quiz = await apiRequest("POST", "/api/quizzes", { topic });
+                    onStartQuiz(quiz);
                 } catch (error) {
-                    alert('Failed to generate quiz. Please try again.');
+                    alert("Failed to generate quiz. Please try again.");
                 } finally {
                     setLoading(false);
                 }
@@ -119,10 +95,10 @@
         }
 
         function Quiz({ quiz, onComplete }) {
-            const [currentQuestion, setCurrentQuestion] = React.useState(0);
-            const [selectedAnswers, setSelectedAnswers] = React.useState([]);
-            const [showExplanation, setShowExplanation] = React.useState(false);
-            const [currentSelection, setCurrentSelection] = React.useState(null);
+            const [currentQuestion, setCurrentQuestion] = useState(0);
+            const [selectedAnswers, setSelectedAnswers] = useState([]);
+            const [showExplanation, setShowExplanation] = useState(false);
+            const [currentSelection, setCurrentSelection] = useState(null);
 
             const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
             const currentQ = quiz.questions[currentQuestion];
@@ -136,18 +112,24 @@
                 setShowExplanation(true);
             };
 
-            const handleNext = () => {
+            const handleNext = async () => {
                 setShowExplanation(false);
                 setCurrentSelection(null);
                 if (currentQuestion < quiz.questions.length - 1) {
                     setCurrentQuestion(currentQuestion + 1);
                 } else {
                     const score = selectedAnswers.filter(a => a.isCorrect).length;
-                    onComplete({
+                    await apiRequest("POST", "/api/quiz-results", {
+                        quizId: quiz.id,
                         score,
                         totalQuestions: quiz.questions.length,
-                        answers: selectedAnswers
+                        answers: selectedAnswers.map((ans, idx) => ({
+                            questionIndex: idx,
+                            selectedAnswer: ans.answer,
+                            isCorrect: ans.isCorrect
+                        }))
                     });
+                    onComplete(quiz.id);
                 }
             };
 
@@ -156,12 +138,8 @@
                     <div className="w-full max-w-3xl space-y-8">
                         <div className="space-y-2">
                             <div className="flex justify-between items-center">
-                                <span className="text-sm font-medium text-gray-600">
-                                    Question {currentQuestion + 1} of {quiz.questions.length}
-                                </span>
-                                <span className="text-sm font-medium text-primary">
-                                    {Math.round(progress)}% Complete
-                                </span>
+                                <span className="text-sm font-medium text-gray-600">Question {currentQuestion + 1} of {quiz.questions.length}</span>
+                                <span className="text-sm font-medium text-primary">{Math.round(progress)}% Complete</span>
                             </div>
                             <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                                 <div 
@@ -172,7 +150,7 @@
                         </div>
 
                         <div className="bg-white rounded-lg shadow-xl border-2 p-6">
-                            <div className="space-y-4">
+                            <div className="space-y-6">
                                 <div className="space-y-1">
                                     <p className="text-sm font-medium text-gray-500">
                                         Topic: {quiz.topic}
@@ -247,7 +225,34 @@
             );
         }
 
-        function Results({ result, quiz, onRetry, onNewQuiz }) {
+        function Results({ quizId }) {
+            const [quiz, setQuiz] = useState(null);
+            const [result, setResult] = useState(null);
+
+            useEffect(() => {
+                async function fetchData() {
+                    try {
+                        const [quizData, resultData] = await Promise.all([
+                            apiRequest("GET", `/api/quizzes/${quizId}`),
+                            apiRequest("GET", `/api/quiz-results/${quizId}`)
+                        ]);
+                        setQuiz(quizData);
+                        setResult(resultData);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+                fetchData();
+            }, [quizId]);
+
+            if (!quiz || !result) {
+                return (
+                    <div className="min-h-screen flex items-center justify-center">
+                        <div className="animate-pulse text-gray-600">Loading results...</div>
+                    </div>
+                );
+            }
+
             const percentage = Math.round((result.score / result.totalQuestions) * 100);
 
             return (
@@ -311,13 +316,13 @@
 
                             <div className="flex gap-4 mt-8">
                                 <button
-                                    onClick={onNewQuiz}
+                                    onClick={() => window.location.reload()}
                                     className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
                                 >
                                     New Topic
                                 </button>
                                 <button
-                                    onClick={onRetry}
+                                    onClick={() => window.history.back()}
                                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
                                 >
                                     Retry Quiz
@@ -329,9 +334,21 @@
             );
         }
 
-        // Mount the React application
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<App />);
+        function App() {
+            const [stage, setStage] = useState("home");
+            const [quiz, setQuiz] = useState(null);
+            const [quizIdForResults, setQuizIdForResults] = useState(null);
+
+            if (stage === "home") {
+                return <Home onStartQuiz={(quiz) => { setQuiz(quiz); setStage("quiz"); }} />;
+            } else if (stage === "quiz") {
+                return <Quiz quiz={quiz} onComplete={(id) => { setQuizIdForResults(id); setStage("results"); }} />;
+            } else if (stage === "results") {
+                return <Results quizId={quizIdForResults} />;
+            }
+        }
+
+        ReactDOM.createRoot(document.getElementById("root")).render(<App />);
     </script>
 </body>
 </html>
