@@ -16,6 +16,7 @@ export default function Quiz({ params }: { params: { id: string } }) {
     isCorrect: boolean;
   }[]>([]);
   const [showExplanation, setShowExplanation] = useState(false);
+  const [currentSelection, setCurrentSelection] = useState<string | undefined>();
   const [, navigate] = useLocation();
 
   const { data: quiz, isLoading } = useQuery<Quiz>({
@@ -34,6 +35,7 @@ export default function Quiz({ params }: { params: { id: string } }) {
   const currentQ = quiz.questions[currentQuestion];
 
   const handleAnswer = async (selectedOption: string) => {
+    setCurrentSelection(selectedOption);
     const selected = parseInt(selectedOption);
     const isCorrect = selected === currentQ.correctAnswer;
 
@@ -43,13 +45,12 @@ export default function Quiz({ params }: { params: { id: string } }) {
 
   const handleNext = async () => {
     setShowExplanation(false);
+    setCurrentSelection(undefined);
     if (currentQuestion < quiz.questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      // Calculate final score
       const score = selectedAnswers.filter(a => a.isCorrect).length;
 
-      // Save result
       await apiRequest("POST", "/api/quiz-results", {
         quizId: parseInt(params.id),
         score,
@@ -61,53 +62,75 @@ export default function Quiz({ params }: { params: { id: string } }) {
         }))
       });
 
-      // Navigate to results
       navigate(`/results/${params.id}`);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
-      <div className="w-full max-w-2xl space-y-6">
-        <Progress value={progress} className="w-full" />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
+      <div className="w-full max-w-3xl space-y-8">
+        <div className="space-y-2">
+          <div className="flex justify-between items-center">
+            <span className="text-sm font-medium text-gray-600">Question {currentQuestion + 1} of {quiz.questions.length}</span>
+            <span className="text-sm font-medium text-primary">{Math.round(progress)}% Complete</span>
+          </div>
+          <Progress value={progress} className="w-full h-2" />
+        </div>
 
-        <Card>
-          <CardHeader>
-            <h2 className="text-xl font-semibold">
-              Question {currentQuestion + 1} of {quiz.questions.length}
-            </h2>
-            <p className="text-sm text-muted-foreground">Topic: {quiz.topic}</p>
+        <Card className="border-2 shadow-lg">
+          <CardHeader className="space-y-4 pb-2">
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-muted-foreground">Topic: {quiz.topic}</p>
+              <h2 className="text-2xl font-semibold leading-tight text-foreground">
+                {currentQ.question}
+              </h2>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-6">
-            <p className="text-lg">{currentQ.question}</p>
-
+          <CardContent className="pt-6 space-y-8">
             <RadioGroup
+              value={currentSelection}
               onValueChange={handleAnswer}
               className="space-y-4"
               disabled={showExplanation}
             >
               {currentQ.options.map((option, index) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem 
-                    value={index.toString()} 
-                    id={`option-${index}`}
-                  />
-                  <Label htmlFor={`option-${index}`}>{option}</Label>
+                <div 
+                  key={index} 
+                  className={`relative flex items-start p-4 rounded-lg transition-colors
+                    ${currentSelection === index.toString() ? 'bg-primary/5 border border-primary/20' : 'hover:bg-gray-50 border border-transparent'}`}
+                >
+                  <div className="flex items-center h-5">
+                    <RadioGroupItem 
+                      value={index.toString()} 
+                      id={`option-${index}`}
+                      className="w-4 h-4"
+                    />
+                  </div>
+                  <Label 
+                    htmlFor={`option-${index}`}
+                    className="ml-3 text-base font-medium cursor-pointer"
+                  >
+                    {option}
+                  </Label>
                 </div>
               ))}
             </RadioGroup>
 
             {showExplanation && (
-              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-semibold mb-2">Explanation:</h3>
-                <p>{currentQ.explanation}</p>
-                <Button 
-                  onClick={handleNext} 
-                  className="mt-4"
-                >
-                  {currentQuestion === quiz.questions.length - 1 ? 
-                    "See Results" : "Next Question"}
-                </Button>
+              <div className="mt-8 rounded-lg bg-blue-50 border border-blue-100">
+                <div className="p-4 space-y-3">
+                  <h3 className="font-semibold text-blue-900">Explanation</h3>
+                  <p className="text-blue-800 text-sm leading-relaxed">
+                    {currentQ.explanation}
+                  </p>
+                  <Button 
+                    onClick={handleNext} 
+                    className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    {currentQuestion === quiz.questions.length - 1 ? 
+                      "See Results" : "Next Question"}
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>
