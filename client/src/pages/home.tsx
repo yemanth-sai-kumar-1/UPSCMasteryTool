@@ -18,14 +18,14 @@ export default function Home() {
 
     setLoading(true);
     try {
-      const res = await apiRequest("POST", "/api/flashcard-sets", { topic });
+      const res = await apiRequest("POST", "/api/quizzes", { topic });
       const data = await res.json();
-      navigate(`/flashcards/${data.id}`);
+      navigate(`/quiz/${data.id}`);
     } catch (error) {
       toast({
         variant: "destructive",
         title: "Error",
-        description: "Failed to generate flashcards. Please try again."
+        description: "Failed to generate quiz. Please try again."
       });
     } finally {
       setLoading(false);
@@ -37,7 +37,7 @@ export default function Home() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <h1 className="text-2xl font-bold text-center bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            UPSC Learning Assistant
+            UPSC Quiz Generator
           </h1>
         </CardHeader>
         <CardContent>
@@ -56,7 +56,7 @@ export default function Home() {
               className="w-full"
               disabled={loading || !topic.trim()}
             >
-              {loading ? "Generating..." : "Generate Flashcards"}
+              {loading ? "Generating Quiz..." : "Start Quiz"}
             </Button>
           </form>
         </CardContent>

@@ -1,45 +1,54 @@
-import { flashcardSets, quizResults, type FlashcardSet, type InsertFlashcardSet, type QuizResult, type InsertQuizResult } from "@shared/schema";
+import { quizzes, quizResults, type Quiz, type InsertQuiz, type QuizResult, type InsertQuizResult } from "@shared/schema";
 
 export interface IStorage {
-  createFlashcardSet(set: InsertFlashcardSet): Promise<FlashcardSet>;
-  getFlashcardSet(id: number): Promise<FlashcardSet | undefined>;
+  createQuiz(quiz: InsertQuiz): Promise<Quiz>;
+  getQuiz(id: number): Promise<Quiz | undefined>;
   saveQuizResult(result: InsertQuizResult): Promise<QuizResult>;
+  getQuizResult(id: number): Promise<QuizResult | undefined>;
 }
 
 export class MemStorage implements IStorage {
-  private flashcardSets: Map<number, FlashcardSet>;
+  private quizzes: Map<number, Quiz>;
   private quizResults: Map<number, QuizResult>;
-  private currentSetId: number;
+  private currentQuizId: number;
   private currentResultId: number;
 
   constructor() {
-    this.flashcardSets = new Map();
+    this.quizzes = new Map();
     this.quizResults = new Map();
-    this.currentSetId = 1;
+    this.currentQuizId = 1;
     this.currentResultId = 1;
   }
 
-  async createFlashcardSet(set: InsertFlashcardSet): Promise<FlashcardSet> {
-    const id = this.currentSetId++;
-    const newSet = {
+  async createQuiz(quiz: InsertQuiz): Promise<Quiz> {
+    const id = this.currentQuizId++;
+    const newQuiz = {
       id,
-      topic: set.topic,
-      flashcards: set.flashcards as { front: string; back: string; }[],
-      mcqs: set.mcqs as { question: string; options: string[]; correctAnswer: number; }[]
+      topic: quiz.topic,
+      questions: quiz.questions as {
+        question: string;
+        options: string[];
+        correctAnswer: number;
+        explanation: string;
+      }[]
     };
-    this.flashcardSets.set(id, newSet);
-    return newSet;
+    this.quizzes.set(id, newQuiz);
+    return newQuiz;
   }
 
-  async getFlashcardSet(id: number): Promise<FlashcardSet | undefined> {
-    return this.flashcardSets.get(id);
+  async getQuiz(id: number): Promise<Quiz | undefined> {
+    return this.quizzes.get(id);
   }
 
   async saveQuizResult(result: InsertQuizResult): Promise<QuizResult> {
     const id = this.currentResultId++;
-    const newResult: QuizResult = { ...result, id };
+    const newResult = { ...result, id };
     this.quizResults.set(id, newResult);
     return newResult;
+  }
+
+  async getQuizResult(id: number): Promise<QuizResult | undefined> {
+    return this.quizResults.get(id);
   }
 }
 

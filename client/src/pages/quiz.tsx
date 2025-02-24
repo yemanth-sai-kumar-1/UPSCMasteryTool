@@ -7,18 +7,22 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
-import type { FlashcardSet } from "@shared/schema";
+import type { Quiz } from "@shared/schema";
 
 export default function Quiz({ params }: { params: { id: string } }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
+  const [selectedAnswers, setSelectedAnswers] = useState<{
+    answer: number;
+    isCorrect: boolean;
+  }[]>([]);
+  const [showExplanation, setShowExplanation] = useState(false);
   const [, navigate] = useLocation();
 
-  const { data: flashcardSet, isLoading } = useQuery<FlashcardSet>({
-    queryKey: [`/api/flashcard-sets/${params.id}`],
+  const { data: quiz, isLoading } = useQuery<Quiz>({
+    queryKey: [`/api/quizzes/${params.id}`],
   });
 
-  if (isLoading || !flashcardSet) {
+  if (isLoading || !quiz) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Progress value={undefined} className="w-full max-w-md" />
@@ -26,31 +30,39 @@ export default function Quiz({ params }: { params: { id: string } }) {
     );
   }
 
-  const progress = ((currentQuestion + 1) / flashcardSet.mcqs.length) * 100;
-  const currentMcq = flashcardSet.mcqs[currentQuestion];
+  const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
+  const currentQ = quiz.questions[currentQuestion];
 
   const handleAnswer = async (selectedOption: string) => {
     const selected = parseInt(selectedOption);
-    const newAnswers = [...selectedAnswers, selected];
-    setSelectedAnswers(newAnswers);
+    const isCorrect = selected === currentQ.correctAnswer;
 
-    if (currentQuestion < flashcardSet.mcqs.length - 1) {
+    setSelectedAnswers([...selectedAnswers, { answer: selected, isCorrect }]);
+    setShowExplanation(true);
+  };
+
+  const handleNext = async () => {
+    setShowExplanation(false);
+    if (currentQuestion < quiz.questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      // Calculate score
-      const correctAnswers = flashcardSet.mcqs.reduce((score, mcq, index) => {
-        return score + (newAnswers[index] === mcq.correctAnswer ? 1 : 0);
-      }, 0);
+      // Calculate final score
+      const score = selectedAnswers.filter(a => a.isCorrect).length;
 
       // Save result
       await apiRequest("POST", "/api/quiz-results", {
-        setId: parseInt(params.id),
-        score: correctAnswers,
-        totalQuestions: flashcardSet.mcqs.length,
+        quizId: parseInt(params.id),
+        score,
+        totalQuestions: quiz.questions.length,
+        answers: selectedAnswers.map((ans, idx) => ({
+          questionIndex: idx,
+          selectedAnswer: ans.answer,
+          isCorrect: ans.isCorrect
+        }))
       });
 
       // Navigate to results
-      navigate(`/results/${params.id}?score=${correctAnswers}&total=${flashcardSet.mcqs.length}`);
+      navigate(`/results/${params.id}`);
     }
   };
 
@@ -62,23 +74,42 @@ export default function Quiz({ params }: { params: { id: string } }) {
         <Card>
           <CardHeader>
             <h2 className="text-xl font-semibold">
-              Question {currentQuestion + 1} of {flashcardSet.mcqs.length}
+              Question {currentQuestion + 1} of {quiz.questions.length}
             </h2>
+            <p className="text-sm text-muted-foreground">Topic: {quiz.topic}</p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className="text-lg">{currentMcq.question}</p>
+            <p className="text-lg">{currentQ.question}</p>
 
             <RadioGroup
               onValueChange={handleAnswer}
               className="space-y-4"
+              disabled={showExplanation}
             >
-              {currentMcq.options.map((option, index) => (
+              {currentQ.options.map((option, index) => (
                 <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem value={index.toString()} id={`option-${index}`} />
+                  <RadioGroupItem 
+                    value={index.toString()} 
+                    id={`option-${index}`}
+                  />
                   <Label htmlFor={`option-${index}`}>{option}</Label>
                 </div>
               ))}
             </RadioGroup>
+
+            {showExplanation && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <h3 className="font-semibold mb-2">Explanation:</h3>
+                <p>{currentQ.explanation}</p>
+                <Button 
+                  onClick={handleNext} 
+                  className="mt-4"
+                >
+                  {currentQuestion === quiz.questions.length - 1 ? 
+                    "See Results" : "Next Question"}
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
