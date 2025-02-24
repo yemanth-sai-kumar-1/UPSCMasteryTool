@@ -4,13 +4,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
 const PROMPT_TEMPLATE = `Create a comprehensive quiz for UPSC exam preparation on the topic: {topic}
 
-Please generate 15 multiple choice questions with:
-1. Clear, detailed questions
-2. 4 options per question
-3. The correct answer (as an index 0-3)
-4. A detailed explanation of why the answer is correct
-
-Format the response exactly as a JSON object with this structure:
+Generate 15 multiple choice questions, returning ONLY the JSON data without any markdown formatting or backticks. The response should be exactly in this format:
 {
   "questions": [
     {
@@ -22,6 +16,14 @@ Format the response exactly as a JSON object with this structure:
   ]
 }`;
 
+function cleanJsonResponse(text: string): string {
+  // Remove markdown code blocks if present
+  text = text.replace(/```(json|JSON)?\n/g, '').replace(/```/g, '');
+  // Remove any leading/trailing whitespace
+  text = text.trim();
+  return text;
+}
+
 export async function generateQuiz(topic: string) {
   try {
     const model = genAI.getGenerativeModel({ model: "gemini-pro" });
@@ -31,13 +33,30 @@ export async function generateQuiz(topic: string) {
     const response = await result.response;
     const text = response.text();
 
-    const content = JSON.parse(text);
+    // Clean the response text before parsing
+    const cleanedText = cleanJsonResponse(text);
 
-    if (!content.questions || !Array.isArray(content.questions)) {
-      throw new Error("Invalid response format from Gemini API");
+    try {
+      const content = JSON.parse(cleanedText);
+
+      if (!content.questions || !Array.isArray(content.questions)) {
+        throw new Error("Invalid response format: missing questions array");
+      }
+
+      // Validate each question has the required fields
+      content.questions.forEach((q: any, index: number) => {
+        if (!q.question || !Array.isArray(q.options) || q.options.length !== 4 
+            || typeof q.correctAnswer !== 'number' || !q.explanation) {
+          throw new Error(`Invalid question format at index ${index}`);
+        }
+      });
+
+      return content;
+    } catch (parseError) {
+      console.error("JSON Parse Error:", parseError);
+      console.error("Cleaned Text:", cleanedText);
+      throw new Error("Failed to parse Gemini API response");
     }
-
-    return content;
   } catch (error) {
     console.error("Error generating quiz:", error);
     throw error;
