@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UPSC Quiz Generator</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            DEFAULT: 'rgb(59 130 246)',
+                            50: 'rgb(239 246 255)',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // React Components
+        function App() {
+            const [page, setPage] = React.useState('home');
+            const [quizData, setQuizData] = React.useState(null);
+            const [quizResult, setQuizResult] = React.useState(null);
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-50">
+                    {page === 'home' && (
+                        <Home onQuizStart={(data) => {
+                            setQuizData(data);
+                            setPage('quiz');
+                        }} />
+                    )}
+                    {page === 'quiz' && quizData && (
+                        <Quiz 
+                            quiz={quizData} 
+                            onComplete={(result) => {
+                                setQuizResult(result);
+                                setPage('results');
+                            }}
+                        />
+                    )}
+                    {page === 'results' && quizResult && (
+                        <Results 
+                            result={quizResult} 
+                            quiz={quizData}
+                            onRetry={() => setPage('quiz')}
+                            onNewQuiz={() => setPage('home')}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        function Home({ onQuizStart }) {
+            const [topic, setTopic] = React.useState('');
+            const [loading, setLoading] = React.useState(false);
+
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                if (!topic.trim()) return;
+
+                setLoading(true);
+                try {
+                    const res = await fetch('/api/quizzes', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ topic })
+                    });
+                    const data = await res.json();
+                    onQuizStart(data);
+                } catch (error) {
+                    alert('Failed to generate quiz. Please try again.');
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-4">
+                    <div className="w-full max-w-md bg-white rounded-lg shadow-xl p-6">
+                        <h1 className="text-2xl font-bold text-center mb-6 bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                            UPSC Quiz Generator
+                        </h1>
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium mb-2">
+                                    Enter your topic:
+                                </label>
+                                <input
+                                    type="text"
+                                    value={topic}
+                                    onChange={(e) => setTopic(e.target.value)}
+                                    placeholder="e.g. Indian Constitution"
+                                    className="w-full p-2 border rounded-md"
+                                />
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={loading || !topic.trim()}
+                                className="w-full bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {loading ? "Generating Quiz..." : "Start Quiz"}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        function Quiz({ quiz, onComplete }) {
+            const [currentQuestion, setCurrentQuestion] = React.useState(0);
+            const [selectedAnswers, setSelectedAnswers] = React.useState([]);
+            const [showExplanation, setShowExplanation] = React.useState(false);
+            const [currentSelection, setCurrentSelection] = React.useState(null);
+
+            const progress = ((currentQuestion + 1) / quiz.questions.length) * 100;
+            const currentQ = quiz.questions[currentQuestion];
+
+            const handleAnswer = (selected) => {
+                if (showExplanation) return;
+
+                setCurrentSelection(selected);
+                const isCorrect = selected === currentQ.correctAnswer;
+                setSelectedAnswers([...selectedAnswers, { answer: selected, isCorrect }]);
+                setShowExplanation(true);
+            };
+
+            const handleNext = () => {
+                setShowExplanation(false);
+                setCurrentSelection(null);
+                if (currentQuestion < quiz.questions.length - 1) {
+                    setCurrentQuestion(currentQuestion + 1);
+                } else {
+                    const score = selectedAnswers.filter(a => a.isCorrect).length;
+                    onComplete({
+                        score,
+                        totalQuestions: quiz.questions.length,
+                        answers: selectedAnswers
+                    });
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6">
+                    <div className="w-full max-w-3xl space-y-8">
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium text-gray-600">
+                                    Question {currentQuestion + 1} of {quiz.questions.length}
+                                </span>
+                                <span className="text-sm font-medium text-primary">
+                                    {Math.round(progress)}% Complete
+                                </span>
+                            </div>
+                            <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                <div 
+                                    className="h-full bg-blue-600 transition-all duration-300"
+                                    style={{ width: `${progress}%` }}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="bg-white rounded-lg shadow-xl border-2 p-6">
+                            <div className="space-y-4">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium text-gray-500">
+                                        Topic: {quiz.topic}
+                                    </p>
+                                    <h2 className="text-xl font-semibold">
+                                        {currentQ.question}
+                                    </h2>
+                                </div>
+
+                                <div className="grid gap-4 mt-6">
+                                    {currentQ.options.map((option, index) => (
+                                        <button
+                                            key={index}
+                                            onClick={() => handleAnswer(index)}
+                                            disabled={showExplanation}
+                                            className={`
+                                                w-full p-4 text-left rounded-lg transition-all duration-200
+                                                border-2 relative overflow-hidden group
+                                                ${currentSelection === index 
+                                                    ? 'border-blue-500 bg-blue-50 shadow-md' 
+                                                    : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
+                                                }
+                                                disabled:opacity-70
+                                            `}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className={`
+                                                    flex items-center justify-center w-6 h-6 rounded-full
+                                                    border-2 transition-colors
+                                                    ${currentSelection === index 
+                                                        ? 'border-blue-500 bg-blue-500 text-white' 
+                                                        : 'border-gray-300 group-hover:border-blue-300'
+                                                    }
+                                                `}>
+                                                    {currentSelection === index && (
+                                                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                                        </svg>
+                                                    )}
+                                                </div>
+                                                <span className="text-base font-medium">
+                                                    {option}
+                                                </span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {showExplanation && (
+                                    <div className="mt-8 rounded-lg bg-blue-50 border border-blue-100 p-4">
+                                        <h3 className="font-semibold text-blue-900 mb-2">
+                                            Explanation
+                                        </h3>
+                                        <p className="text-blue-800 text-sm leading-relaxed">
+                                            {currentQ.explanation}
+                                        </p>
+                                        <button 
+                                            onClick={handleNext}
+                                            className="w-full mt-4 bg-blue-600 text-white p-2 rounded-md hover:bg-blue-700"
+                                        >
+                                            {currentQuestion === quiz.questions.length - 1 
+                                                ? "See Results" 
+                                                : "Next Question"
+                                            }
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function Results({ result, quiz, onRetry, onNewQuiz }) {
+            const percentage = Math.round((result.score / result.totalQuestions) * 100);
+
+            return (
+                <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-6">
+                    <div className="w-full max-w-3xl space-y-6">
+                        <div className="bg-white rounded-lg shadow-xl p-6">
+                            <div className="text-center mb-8">
+                                <h1 className="text-2xl font-bold mb-2">Quiz Results</h1>
+                                <p className="text-gray-600">Topic: {quiz.topic}</p>
+                            </div>
+
+                            <div className="text-center space-y-4 mb-8">
+                                <p className="text-4xl font-bold text-blue-600">
+                                    {result.score} / {result.totalQuestions}
+                                </p>
+                                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                                    <div 
+                                        className="h-full bg-blue-600"
+                                        style={{ width: `${percentage}%` }}
+                                    />
+                                </div>
+                                <p className="text-lg text-gray-600">
+                                    You scored {percentage}%
+                                </p>
+                            </div>
+
+                            <div className="space-y-6">
+                                <h2 className="text-xl font-semibold">Detailed Review</h2>
+                                {result.answers.map((answer, index) => (
+                                    <div key={index} className="bg-gray-50 rounded-lg p-4 space-y-2">
+                                        <div className="flex items-start gap-3">
+                                            {answer.isCorrect ? (
+                                                <svg className="w-6 h-6 text-green-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            ) : (
+                                                <svg className="w-6 h-6 text-red-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            )}
+                                            <div className="flex-grow">
+                                                <p className="font-medium">
+                                                    {quiz.questions[index].question}
+                                                </p>
+                                                <p className="text-sm text-gray-600 mt-1">
+                                                    Your answer: {quiz.questions[index].options[answer.answer]}
+                                                </p>
+                                                {!answer.isCorrect && (
+                                                    <p className="text-sm text-green-600">
+                                                        Correct answer: {quiz.questions[index].options[quiz.questions[index].correctAnswer]}
+                                                    </p>
+                                                )}
+                                                <p className="text-sm text-gray-600 mt-2">
+                                                    {quiz.questions[index].explanation}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+
+                            <div className="flex gap-4 mt-8">
+                                <button
+                                    onClick={onNewQuiz}
+                                    className="flex-1 px-4 py-2 border border-blue-600 text-blue-600 rounded-md hover:bg-blue-50"
+                                >
+                                    New Topic
+                                </button>
+                                <button
+                                    onClick={onRetry}
+                                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                                >
+                                    Retry Quiz
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Mount the React application
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
