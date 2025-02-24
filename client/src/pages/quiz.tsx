@@ -7,14 +7,15 @@ import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
+import type { FlashcardSet } from "@shared/schema";
 
 export default function Quiz({ params }: { params: { id: string } }) {
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [, navigate] = useLocation();
 
-  const { data: flashcardSet, isLoading } = useQuery({
-    queryKey: ["/api/flashcard-sets", params.id],
+  const { data: flashcardSet, isLoading } = useQuery<FlashcardSet>({
+    queryKey: [`/api/flashcard-sets/${params.id}`],
   });
 
   if (isLoading || !flashcardSet) {
@@ -28,16 +29,17 @@ export default function Quiz({ params }: { params: { id: string } }) {
   const progress = ((currentQuestion + 1) / flashcardSet.mcqs.length) * 100;
   const currentMcq = flashcardSet.mcqs[currentQuestion];
 
-  const handleAnswer = async (selectedOption: number) => {
-    const newAnswers = [...selectedAnswers, selectedOption];
+  const handleAnswer = async (selectedOption: string) => {
+    const selected = parseInt(selectedOption);
+    const newAnswers = [...selectedAnswers, selected];
     setSelectedAnswers(newAnswers);
 
     if (currentQuestion < flashcardSet.mcqs.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
       // Calculate score
-      const correctAnswers = flashcardSet.mcqs.reduce((acc, mcq, index) => {
-        return acc + (newAnswers[index] === mcq.correctAnswer ? 1 : 0);
+      const correctAnswers = flashcardSet.mcqs.reduce((score, mcq, index) => {
+        return score + (newAnswers[index] === mcq.correctAnswer ? 1 : 0);
       }, 0);
 
       // Save result
@@ -56,7 +58,7 @@ export default function Quiz({ params }: { params: { id: string } }) {
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-50 p-4">
       <div className="w-full max-w-2xl space-y-6">
         <Progress value={progress} className="w-full" />
-        
+
         <Card>
           <CardHeader>
             <h2 className="text-xl font-semibold">
@@ -65,9 +67,9 @@ export default function Quiz({ params }: { params: { id: string } }) {
           </CardHeader>
           <CardContent className="space-y-6">
             <p className="text-lg">{currentMcq.question}</p>
-            
+
             <RadioGroup
-              onValueChange={(value) => handleAnswer(parseInt(value))}
+              onValueChange={handleAnswer}
               className="space-y-4"
             >
               {currentMcq.options.map((option, index) => (

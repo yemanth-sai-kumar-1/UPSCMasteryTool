@@ -21,7 +21,12 @@ export class MemStorage implements IStorage {
 
   async createFlashcardSet(set: InsertFlashcardSet): Promise<FlashcardSet> {
     const id = this.currentSetId++;
-    const newSet: FlashcardSet = { ...set, id };
+    const newSet = {
+      id,
+      topic: set.topic,
+      flashcards: set.flashcards as { front: string; back: string; }[],
+      mcqs: set.mcqs as { question: string; options: string[]; correctAnswer: number; }[]
+    };
     this.flashcardSets.set(id, newSet);
     return newSet;
   }

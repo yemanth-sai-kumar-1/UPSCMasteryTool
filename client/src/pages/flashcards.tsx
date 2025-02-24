@@ -6,17 +6,18 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { FlashcardSet } from "@shared/schema";
 
 export default function Flashcards({ params }: { params: { id: string } }) {
   const [currentCard, setCurrentCard] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [, navigate] = useLocation();
 
-  const { data: flashcardSet, isLoading } = useQuery({
-    queryKey: ["/api/flashcard-sets", params.id],
+  const { data: flashcardSet, isLoading } = useQuery<FlashcardSet>({
+    queryKey: [`/api/flashcard-sets/${params.id}`],
   });
 
-  if (isLoading) {
+  if (isLoading || !flashcardSet) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="space-y-4 w-full max-w-md">
@@ -26,8 +27,6 @@ export default function Flashcards({ params }: { params: { id: string } }) {
       </div>
     );
   }
-
-  if (!flashcardSet) return null;
 
   const progress = ((currentCard + 1) / flashcardSet.flashcards.length) * 100;
 
@@ -51,7 +50,7 @@ export default function Flashcards({ params }: { params: { id: string } }) {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50">
       <div className="w-full max-w-2xl space-y-6">
         <Progress value={progress} className="w-full" />
-        
+
         <div className="relative h-[400px]">
           <AnimatePresence mode="wait">
             <motion.div
@@ -70,7 +69,7 @@ export default function Flashcards({ params }: { params: { id: string } }) {
                   </p>
                 </CardContent>
               </Card>
-              
+
               <Card className={`absolute w-full h-full rotate-y-180 ${!flipped ? 'backface-hidden' : ''}`}>
                 <CardContent className="flex items-center justify-center h-full p-6">
                   <p className="text-xl text-center">
@@ -91,11 +90,11 @@ export default function Flashcards({ params }: { params: { id: string } }) {
             <ChevronLeft className="h-4 w-4 mr-2" />
             Previous
           </Button>
-          
+
           <span className="text-sm text-muted-foreground">
             {currentCard + 1} / {flashcardSet.flashcards.length}
           </span>
-          
+
           <Button onClick={handleNext}>
             {currentCard === flashcardSet.flashcards.length - 1 ? (
               "Start Quiz"
